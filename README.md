@@ -1,6 +1,6 @@
 Useless TEMP cleaning program - Works on Vista x32 and above
 1. Download AutoDelTemp.exe
-It's 35KB. Don't blink, you'll miss it.
+It's 37KB. Don't blink, you'll miss it.
 
 2. Copy to shell:startup
 Win+R → shell:startup → paste there. Done.
