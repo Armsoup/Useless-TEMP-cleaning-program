@@ -11,7 +11,7 @@ void CheckRAM() {
     GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc));
 
     SIZE_T currentRAM = pmc.WorkingSetSize;
-    SIZE_T limitRAM = 1 * 1024 * 1024;
+    SIZE_T limitRAM = 3 * 1024 * 1024;
 
     if (currentRAM > limitRAM) {
         EmptyWorkingSet(GetCurrentProcess());
