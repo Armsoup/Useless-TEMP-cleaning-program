@@ -2,8 +2,34 @@
 #include <iostream>
 #include <filesystem>
 #include <Windows.h>
+#include <psapi.h>
 namespace fs = std::filesystem;
 using namespace std;
+
+void CheckRAM() {
+    PROCESS_MEMORY_COUNTERS pmc;
+    GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc));
+
+    SIZE_T currentRAM = pmc.WorkingSetSize;
+    SIZE_T limitRAM = 1 * 1024 * 1024;
+
+    if (currentRAM > limitRAM) {
+        EmptyWorkingSet(GetCurrentProcess());
+        Sleep(1000);
+        if (currentRAM > limitRAM * 1.5) {
+            STARTUPINFOA si = { sizeof(si) };
+            PROCESS_INFORMATION pi;
+            char exePath[MAX_PATH];
+            GetModuleFileNameA(NULL, exePath, MAX_PATH);
+
+            CreateProcessA(exePath, NULL, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+
+            exit(0);
+        }
+    }
+}
 
 uintmax_t MaxSize = 300 * 1024 * 1024;
 string TempPath = getenv("TEMP");
@@ -11,6 +37,7 @@ string TempPath = getenv("TEMP");
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 	while (true) {
 		SleepEx(300000, TRUE);
+		CheckRAM();
 		if (fs::exists(TempPath) && fs::is_directory(TempPath)) {
 			uintmax_t totalSize = 0;
 			for (const auto& entry : fs::recursive_directory_iterator(TempPath, fs::directory_options::skip_permission_denied)) {
