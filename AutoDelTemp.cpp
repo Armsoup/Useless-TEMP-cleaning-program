@@ -2,7 +2,6 @@
 #include <iostream>
 #include <filesystem>
 #include <Windows.h>
-#include <Lmcons.h>
 namespace fs = std::filesystem;
 using namespace std;
 
@@ -11,11 +10,12 @@ string TempPath = getenv("TEMP");
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 	while (true) {
-		Sleep(300000);
+		SleepEx(300000, TRUE);
 		if (fs::exists(TempPath) && fs::is_directory(TempPath)) {
 			uintmax_t totalSize = 0;
 			for (const auto& entry : fs::recursive_directory_iterator(TempPath, fs::directory_options::skip_permission_denied)) {
 				try {
+					if (fs::is_symlink(entry.path())) continue;
 					if (fs::is_regular_file(entry.path())) {
 						totalSize += fs::file_size(entry.path());
 					}
@@ -25,6 +25,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			if (totalSize >= MaxSize) {
 				for (const auto& entry : fs::directory_iterator(TempPath, fs::directory_options::skip_permission_denied)) {
 					try {
+						SetFileAttributesA(entry.path().string().c_str(), FILE_ATTRIBUTE_NORMAL);
 						fs::remove_all(entry.path());
 					}
 					catch (const fs::filesystem_error& e) {
