@@ -36,8 +36,9 @@ string TempPath = getenv("TEMP");
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 	while (true) {
-		SleepEx(300000, TRUE);
+		SleepEx(50000, TRUE);
 		CheckRAM();
+		SleepEx(250000, TRUE);
 		if (fs::exists(TempPath) && fs::is_directory(TempPath)) {
 			uintmax_t totalSize = 0;
 			for (const auto& entry : fs::recursive_directory_iterator(TempPath, fs::directory_options::skip_permission_denied)) {
@@ -49,16 +50,42 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				}
 				catch (...) {}
 			}
-			if (totalSize >= MaxSize) {
-				for (const auto& entry : fs::directory_iterator(TempPath, fs::directory_options::skip_permission_denied)) {
-					try {
-						SetFileAttributesA(entry.path().string().c_str(), FILE_ATTRIBUTE_NORMAL);
-						fs::remove_all(entry.path());
-					}
-					catch (const fs::filesystem_error& e) {
-					}
-				}
-			}
+            if (totalSize >= MaxSize) {
+                for (const auto& entry : fs::recursive_directory_iterator(TempPath, fs::directory_options::skip_permission_denied)) {
+                    try {
+                        if (fs::is_symlink(entry.path())) continue;
+
+                        if (fs::is_regular_file(entry.path())) {
+                            string pathStr = entry.path().string();
+                            DWORD attributes = GetFileAttributesA(pathStr.c_str());
+
+                            if (attributes != INVALID_FILE_ATTRIBUTES) {
+                                attributes &= ~(FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_READONLY);
+                                if (attributes == 0) attributes = FILE_ATTRIBUTE_NORMAL;
+                                SetFileAttributesA(pathStr.c_str(), attributes);
+                            }
+                        }
+                    }
+                    catch (...) {}
+                }
+
+                for (const auto& entry : fs::directory_iterator(TempPath, fs::directory_options::skip_permission_denied)) {
+                    try {
+                        if (fs::is_symlink(entry.path())) continue;
+
+                        string pathStr = entry.path().string();
+                        DWORD attributes = GetFileAttributesA(pathStr.c_str());
+
+                        if (attributes != INVALID_FILE_ATTRIBUTES) {
+                            attributes &= ~(FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_READONLY);
+                            if (attributes == 0) attributes = FILE_ATTRIBUTE_NORMAL;
+                            SetFileAttributesA(pathStr.c_str(), attributes);
+                        }
+                        fs::remove_all(entry.path());
+                    }
+                    catch (...) {}
+                }
+            }
 		}
 	}
 	return 0;
