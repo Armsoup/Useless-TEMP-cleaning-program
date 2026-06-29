@@ -96,6 +96,24 @@ void CheckRAM() {
 uintmax_t MaxSize = 300 * 1024 * 1024;
 string TempPath = getenv("TEMP");
 
+void CheckTEMP() {
+	totalSize = 0;
+	if (fs::exists(TempPath) && fs::is_directory(TempPath)) {
+		for (const auto& entry : fs::recursive_directory_iterator(TempPath, fs::directory_options::skip_permission_denied)) {
+			try {
+				if (fs::is_symlink(entry.path())) continue;
+				if (fs::is_regular_file(entry.path())) {
+					totalSize += fs::file_size(entry.path());
+				}
+			}
+			catch (...) {}
+		}
+		if (totalSize >= MaxSize) {
+			ForceClean();
+		}
+	}
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	if (message == WM_TRAYICON) {
 		if (lParam == WM_RBUTTONUP) {
@@ -104,6 +122,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
 			HMENU hMenu = CreatePopupMenu();
 			wostringstream command;
+			CheckTEMP();
 			command << L"Size TEMP: " << totalSize / 1024 / 1024 << L"/" << MaxSize / 1024 / 1024 << L" MB";
 			AppendMenuW(hMenu, MF_STRING, 0, command.str().c_str());
 			AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
@@ -199,21 +218,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				lastCheck = GetTickCount64();
 				try {
 					CheckRAM();
-					totalSize = 0;
-					if (fs::exists(TempPath) && fs::is_directory(TempPath)) {
-						for (const auto& entry : fs::recursive_directory_iterator(TempPath, fs::directory_options::skip_permission_denied)) {
-							try {
-								if (fs::is_symlink(entry.path())) continue;
-								if (fs::is_regular_file(entry.path())) {
-									totalSize += fs::file_size(entry.path());
-								}
-							}
-							catch (...) {}
-						}
-						if (totalSize >= MaxSize) {
-							ForceClean();
-						}
-					}
+					CheckTEMP();
 				}
 				catch (...) {}
 			}
