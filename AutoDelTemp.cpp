@@ -9,6 +9,8 @@
 #include <psapi.h>
 #include <cstdlib>
 #include <sstream>
+#include <thread>
+#include <atomic>
 #include "resource.h"
 namespace fs = std::filesystem;
 using namespace std;
@@ -16,6 +18,8 @@ using namespace std;
 #define WM_TRAYICON (WM_USER + 1)
 #define IDM_CLEAN 1001
 #define IDM_EXIT 1002
+
+atomic<uintmax_t> totalSize = 0;
 
 NOTIFYICONDATAW nidW = { 0 };
 HWND hWndHidden = NULL;
@@ -28,6 +32,8 @@ void RemoveTrayIcon() {
 }
 
 void ForceClean() {
+	static atomic_flag isCleaning = ATOMIC_FLAG_INIT;
+	if (isCleaning.test_and_set(memory_order_acquire)) return;
 	string TempPath = getenv("TEMP");
 	for (const auto& entry : fs::recursive_directory_iterator(TempPath, fs::directory_options::skip_permission_denied)) {
 		try {
@@ -58,6 +64,7 @@ void ForceClean() {
 		}
 		catch (...) {}
 	}
+	isCleaning.clear(memory_order_release);
 }
 
 void CheckRAM() {
@@ -96,6 +103,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			GetCursorPos(&pt);
 
 			HMENU hMenu = CreatePopupMenu();
+			wostringstream command;
+			command << L"Size TEMP: " << totalSize / 1024 / 1024 << L"/" << MaxSize / 1024 / 1024 << L" MB";
+			AppendMenuW(hMenu, MF_STRING, 0, command.str().c_str());
+			AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
 			AppendMenuW(hMenu, MF_STRING, IDM_CLEAN, L"Clean now");
 			AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
 			AppendMenuW(hMenu, MF_STRING, IDM_EXIT, L"Exit :(");
@@ -105,7 +116,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			DestroyMenu(hMenu);
 
 			if (cmd == IDM_CLEAN) {
-				ForceClean();
+				thread(ForceClean).detach();
 			}
 			else if (cmd == IDM_EXIT) {
 				RemoveTrayIcon();
@@ -177,42 +188,44 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	nidW.hIcon = (HICON)LoadImageW(hInstance, MAKEINTRESOURCEW(IDI_ICON1), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
 
 
-	std::wstring tipText = L"AutoDelTemp Active";
+	wstring tipText = L"AutoDelTemp Active";
 	tipText.copy(nidW.szTip, tipText.size());
 	Shell_NotifyIconW(NIM_ADD, &nidW);
 
-	DWORD lastCheck = GetTickCount64();
-
-	while (true) {
-		MSG msg;
-		while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
-			TranslateMessage(&msg);
-			DispatchMessageW(&msg);
-		}
-
-		if (GetTickCount64() - lastCheck > 300000) {
-			lastCheck = GetTickCount64();
-			try {
-				CheckRAM();
-				if (fs::exists(TempPath) && fs::is_directory(TempPath)) {
-					uintmax_t totalSize = 0;
-					for (const auto& entry : fs::recursive_directory_iterator(TempPath, fs::directory_options::skip_permission_denied)) {
-						try {
-							if (fs::is_symlink(entry.path())) continue;
-							if (fs::is_regular_file(entry.path())) {
-								totalSize += fs::file_size(entry.path());
+	thread monitorThread([=]() {
+		DWORD lastCheck = GetTickCount64();
+		while (true) {
+			if (GetTickCount64() - lastCheck > 300000) {
+				lastCheck = GetTickCount64();
+				try {
+					CheckRAM();
+					totalSize = 0;
+					if (fs::exists(TempPath) && fs::is_directory(TempPath)) {
+						for (const auto& entry : fs::recursive_directory_iterator(TempPath, fs::directory_options::skip_permission_denied)) {
+							try {
+								if (fs::is_symlink(entry.path())) continue;
+								if (fs::is_regular_file(entry.path())) {
+									totalSize += fs::file_size(entry.path());
+								}
 							}
+							catch (...) {}
 						}
-						catch (...) {}
-					}
-					if (totalSize >= MaxSize) {
-						ForceClean();
+						if (totalSize >= MaxSize) {
+							ForceClean();
+						}
 					}
 				}
+				catch (...) {}
 			}
-			catch (...) {}
+			Sleep(10);
 		}
-		Sleep(10);
+		});
+	monitorThread.detach();
+
+	MSG msg;
+	while (GetMessageW(&msg, NULL, 0, 0)) {
+		TranslateMessage(&msg);
+		DispatchMessageW(&msg);
 	}
 
 	RemoveTrayIcon();
