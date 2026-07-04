@@ -12,6 +12,7 @@
 #include <thread>
 #include <atomic>
 #include "resource.h"
+
 namespace fs = std::filesystem;
 using namespace std;
 
@@ -77,6 +78,7 @@ void CheckRAM() {
 	if (currentRAM > limitRAM) {
 		EmptyWorkingSet(GetCurrentProcess());
 		Sleep(1000);
+		currentRAM = pmc.WorkingSetSize;
 		if (currentRAM > limitRAM * 1.5) {
 			STARTUPINFOA si = { sizeof(si) };
 			PROCESS_INFORMATION pi;
@@ -212,7 +214,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	Shell_NotifyIconW(NIM_ADD, &nidW);
 
 	thread monitorThread([=]() {
-		DWORD lastCheck = GetTickCount64();
+		DWORD64 lastCheck = GetTickCount64();
 		while (true) {
 			if (GetTickCount64() - lastCheck > 300000) {
 				lastCheck = GetTickCount64();
