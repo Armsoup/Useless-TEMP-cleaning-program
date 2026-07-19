@@ -124,9 +124,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
 			HMENU hMenu = CreatePopupMenu();
 			wostringstream command;
+
 			CheckTEMP();
 			command << L"Size TEMP: " << totalSize / 1024 / 1024 << L"/" << MaxSize / 1024 / 1024 << L" MB";
-			AppendMenuW(hMenu, MF_STRING, 0, command.str().c_str());
+			AppendMenuW(hMenu, MF_GRAYED | MF_DISABLED, 0, command.str().c_str());
 			AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
 			AppendMenuW(hMenu, MF_STRING, IDM_CLEAN, L"Clean now");
 			AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
@@ -153,8 +154,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
 
 	if (argv != NULL) {
+		int NoWindow = 0;
 		for (int i = 1; i < argc; ++i) {
 			wstring arg = argv[i];
+
 
 			if (arg == L"--clean-now") {
 				ForceClean();
@@ -171,6 +174,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				LocalFree(argv);
 				exit(0);
 			}
+			else if (arg == L"--no-window") {
+				NoWindow = 1;
+			}
 			else if (arg == L"--size" && (i + 1 < argc)) {
 				wstring val = argv[++i];
 				MaxSize = stoull(val) * 1024 * 1024;
@@ -182,10 +188,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					FreeConsole();
 				}
 				else {
-					DWORD64 Size = MaxSize / 1024 / 1024;
-					ostringstream command;
-					command << "echo OK! MaxSize: " << Size << " MB & pause";
-					system(command.str().c_str());
+					if (NoWindow == 0) {
+						DWORD64 Size = MaxSize / 1024 / 1024;
+						ostringstream command;
+						command << "echo OK! MaxSize: " << Size << " MB & pause";
+						system(command.str().c_str());
+					}
 				}
 			}
 		}
